@@ -24,6 +24,10 @@ class VehicleOut(BaseModel):
     phone: Optional[str] = None
     message: Optional[str] = None
 
+@app.get("/")
+def root():
+    return {"message": "Vehicle Info API is running!"}
+
 @app.get("/vehicle", response_model=VehicleOut)
 def get_vehicle(rc: str = Query(..., min_length=6, max_length=12)):
     rc = rc.strip().upper()
