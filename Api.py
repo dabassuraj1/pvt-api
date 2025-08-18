@@ -31,7 +31,7 @@ def root():
 @app.get("/vehicle", response_model=VehicleOut)
 def get_vehicle(rc: str = Query(..., min_length=6, max_length=12)):
     rc = rc.strip().upper()
-    url = f"https://vahanx.in/rc-search/{rc}"
+    url = f"https://vahanx.in/rc-search/"
     headers = {
         "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) "
                       "AppleWebKit/537.36 (KHTML, like Gecko) "
