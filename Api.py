@@ -6,6 +6,7 @@ from typing import Optional
 
 app = FastAPI(title="Vehicle Info API", version="1.0")
 
+
 class VehicleOut(BaseModel):
     ok: bool
     rc: str
@@ -24,8 +25,19 @@ class VehicleOut(BaseModel):
     phone: Optional[str] = None
     message: Optional[str] = None
 
+
+@app.get("/")
+def home():
+    return {
+        "message": "Welcome to Vehicle Info API 🚗",
+        "usage": "Go to /vehicle?rc=MH12AB1234"
+    }
+
+
 @app.get("/vehicle", response_model=VehicleOut)
-def get_vehicle(rc: str = Query(..., min_length=6, max_length=12)):
+def get_vehicle(
+    rc: str = Query("MH12AB1234", min_length=6, max_length=12, description="Vehicle RC number")
+):
     rc = rc.strip().upper()
     url = f"https://vahanx.in/rc-search/{rc}"
     headers = {
