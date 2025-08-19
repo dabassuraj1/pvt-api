@@ -1,3 +1,10 @@
+from fastapi import FastAPI
+import requests
+from bs4 import BeautifulSoup
+
+app = FastAPI()
+
+
 def get_vehicle_details(rc_number: str) -> dict:
     """Fetches comprehensive vehicle details from vahanx.in."""
     rc = rc_number.strip().upper()
@@ -18,7 +25,7 @@ def get_vehicle_details(rc_number: str) -> dict:
     }
 
     try:
-        response = requests.get(url, headers=headers)
+        response = requests.get(url, headers=headers, timeout=20)
         response.raise_for_status()
         soup = BeautifulSoup(response.text, 'html.parser')
     except requests.exceptions.RequestException as e:
@@ -28,7 +35,10 @@ def get_vehicle_details(rc_number: str) -> dict:
 
     def get_value(label):
         try:
-            div = soup.find("span", string=label).find_parent("div")
+            span = soup.find("span", string=label)
+            if not span:
+                return None
+            div = span.find_parent("div")
             return div.find("p").get_text(strip=True)
         except AttributeError:
             return None
@@ -59,3 +69,13 @@ def get_vehicle_details(rc_number: str) -> dict:
         "NOTE": "💀Android and ☠Rahul SAY's hello 💸"
     }
     return data
+
+
+@app.get("/")
+def home():
+    return {"message": "Vehicle Info API is running 🚀"}
+
+
+@app.get("/rc/{rc_number}")
+def fetch_vehicle(rc_number: str):
+    return get_vehicle_details(rc_number)
