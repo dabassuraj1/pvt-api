@@ -1,81 +1,79 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Query
+from pydantic import BaseModel
 import requests
 from bs4 import BeautifulSoup
+from typing import Optional
 
-app = FastAPI()
+app = FastAPI(title="Vehicle Info API", version="1.0")
 
+class VehicleOut(BaseModel):
+    ok: bool
+    rc: str
+    owner_name: Optional[str] = None
+    father_name: Optional[str] = None
+    model_name: Optional[str] = None
+    maker_model: Optional[str] = None
+    vehicle_class: Optional[str] = None
+    fuel: Optional[str] = None
+    reg_date: Optional[str] = None
+    insurance: Optional[dict] = None
+    financier_name: Optional[str] = None
+    rto: Optional[str] = None
+    address: Optional[str] = None
+    city: Optional[str] = None
+    phone: Optional[str] = None
+    message: Optional[str] = None
 
-def get_vehicle_details(rc_number: str) -> dict:
-    """Fetches comprehensive vehicle details from vahanx.in."""
-    rc = rc_number.strip().upper()
+@app.get("/vehicle", response_model=VehicleOut)
+def get_vehicle(rc: str = Query(..., min_length=6, max_length=12)):
+    rc = rc.strip().upper()
     url = f"https://vahanx.in/rc-search/{rc}"
-
     headers = {
-        "Host": "vahanx.in",
-        "Connection": "keep-alive",
-        "sec-ch-ua": "\"Chromium\";v=\"130\", \"Google Chrome\";v=\"130\", \"Not?A_Brand\";v=\"99\"",
-        "sec-ch-ua-mobile": "?1",
-        "sec-ch-ua-platform": "\"Android\"",
-        "Upgrade-Insecure-Requests": "1",
-        "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36",
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
-        "Referer": "https://vahanx.in/rc-search",
-        "Accept-Encoding": "gzip, deflate, br, zstd",
-        "Accept-Language": "en-US,en;q=0.9"
+        "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) "
+                      "AppleWebKit/537.36 (KHTML, like Gecko) "
+                      "Chrome/122.0.0.0 Safari/537.36"
     }
 
     try:
-        response = requests.get(url, headers=headers, timeout=20)
-        response.raise_for_status()
-        soup = BeautifulSoup(response.text, 'html.parser')
-    except requests.exceptions.RequestException as e:
-        return {"error": f"Network error: {e}"}
+        resp = requests.get(url, headers=headers, timeout=15)
+        if resp.status_code != 200:
+            return VehicleOut(ok=False, rc=rc, message=f"HTTP {resp.status_code}")
+
+        soup = BeautifulSoup(resp.text, "html.parser")
+        
+        # Check if the page itself says "No data found"
+        no_data_found = soup.find(string=lambda text: text and "No data found" in text)
+        if no_data_found:
+            return VehicleOut(ok=False, rc=rc, message="No data found for this RC number on the source website.")
+
+        data = {}
+
+        def get_text(label):
+            el = soup.find("td", string=lambda t: t and label in t)
+            return el.find_next("td").get_text(strip=True) if el else None
+
+        data["owner_name"] = get_text("Owner Name")
+        data["father_name"] = get_text("Father Name")
+        data["model_name"] = get_text("Model Name")
+        data["maker_model"] = get_text("Maker Model")
+        data["vehicle_class"] = get_text("Vehicle Class")
+        data["fuel"] = get_text("Fuel")
+        data["reg_date"] = get_text("Registration Date")
+        data["insurance"] = {
+            "number": get_text("Insurance No"),
+            "expiry": get_text("Insurance Expiry Date"),
+            "upto": get_text("Insurance Upto"),
+        }
+        data["financier_name"] = get_text("Financier Name")
+        data["rto"] = get_text("RTO")
+        data["address"] = get_text("Address")
+        data["city"] = get_text("City")
+        data["phone"] = get_text("Phone")
+
+        if not any(data.values()):
+            return VehicleOut(ok=False, rc=rc, message="Could not find any data fields. The website structure may have changed.")
+
+        return VehicleOut(ok=True, rc=rc, **data)
+
     except Exception as e:
-        return {"error": str(e)}
-
-    def get_value(label):
-        try:
-            span = soup.find("span", string=label)
-            if not span:
-                return None
-            div = span.find_parent("div")
-            return div.find("p").get_text(strip=True)
-        except AttributeError:
-            return None
-
-    data = {
-        "Owner Name": get_value("Owner Name"),
-        "Father's Name": get_value("Father's Name"),
-        "Owner Serial No": get_value("Owner Serial No"),
-        "Model Name": get_value("Model Name"),
-        "Maker Model": get_value("Maker Model"),
-        "Vehicle Class": get_value("Vehicle Class"),
-        "Fuel Type": get_value("Fuel Type"),
-        "Fuel Norms": get_value("Fuel Norms"),
-        "Registration Date": get_value("Registration Date"),
-        "Insurance Company": get_value("Insurance Company"),
-        "Insurance No": get_value("Insurance No"),
-        "Insurance Expiry": get_value("Insurance Expiry"),
-        "Insurance Upto": get_value("Insurance Upto"),
-        "Fitness Upto": get_value("Fitness Upto"),
-        "Tax Upto": get_value("Tax Upto"),
-        "PUC No": get_value("PUC No"),
-        "PUC Upto": get_value("PUC Upto"),
-        "Financier Name": get_value("Financier Name"),
-        "Registered RTO": get_value("Registered RTO"),
-        "Address": get_value("Address"),
-        "City Name": get_value("City Name"),
-        "Phone": get_value("Phone"),
-        "NOTE": "💀Android and ☠Rahul SAY's hello 💸"
-    }
-    return data
-
-
-@app.get("/")
-def home():
-    return {"message": "Vehicle Info API is running 🚀"}
-
-
-@app.get("/rc/{rc_number}")
-def fetch_vehicle(rc_number: str):
-    return get_vehicle_details(rc_number)
+        return VehicleOut(ok=False, rc=rc, message=str(e))
