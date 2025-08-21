@@ -1,7 +1,14 @@
+# bot3.py
+from fastapi import FastAPI, Query
+from bs4 import BeautifulSoup
+import requests
+
+app = FastAPI(title="Vehicle Info API", version="1.0")
+
 def get_vehicle_details(rc_number: str) -> dict:
     """Fetches comprehensive vehicle details from vahanx.in."""
     rc = rc_number.strip().upper()
-    url = f"https://api-vehicle-osint.vercel.app/?rc="
+    url = f"https://api-vehicle-osint.vercel.app/?rc={rc}"  # Fixed: append rc
 
     headers = {
         "Host": "vahanx.in",
@@ -18,7 +25,7 @@ def get_vehicle_details(rc_number: str) -> dict:
     }
 
     try:
-        response = requests.get(url, headers=headers)
+        response = requests.get(url, headers=headers, timeout=15)
         response.raise_for_status()
         soup = BeautifulSoup(response.text, 'html.parser')
     except requests.exceptions.RequestException as e:
@@ -59,3 +66,9 @@ def get_vehicle_details(rc_number: str) -> dict:
         "NOTE": "💀Android and ☠Rahul SAY's hello 💸"
     }
     return data
+
+# FastAPI route
+@app.get("/vehicle")
+def vehicle(rc: str = Query(..., min_length=6, max_length=12, description="Vehicle RC number")):
+    """API endpoint to fetch vehicle details by RC number"""
+    return get_vehicle_details(rc)
