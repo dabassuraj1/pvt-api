@@ -1,79 +1,78 @@
-from fastapi import FastAPI, Query
-from pydantic import BaseModel
 import requests
 from bs4 import BeautifulSoup
-from typing import Optional
+import re
+import logging
+import webbrowser
 
-app = FastAPI(title="Vehicle Info API", version="1.0")
-
-class VehicleOut(BaseModel):
-    ok: bool
-    rc: str
-    owner_name: Optional[str] = None
-    father_name: Optional[str] = None
-    model_name: Optional[str] = None
-    maker_model: Optional[str] = None
-    vehicle_class: Optional[str] = None
-    fuel: Optional[str] = None
-    reg_date: Optional[str] = None
-    insurance: Optional[dict] = None
-    financier_name: Optional[str] = None
-    rto: Optional[str] = None
-    address: Optional[str] = None
-    city: Optional[str] = None
-    phone: Optional[str] = None
-    message: Optional[str] = None
-
-@app.get("/vehicle", response_model=VehicleOut)
-def get_vehicle(rc: str = Query(..., min_length=6, max_length=12)):
-    rc = rc.strip().upper()
-    url = f"https://vahanx.in/rc-search/{rc}"
+def escape_markdown(text):
+    return re.sub(r"([_*()~`>#+\-=|{}.!])", r"\\\1", text)
+logging.basicConfig(format="%(message)s", level=logging.INFO)
+logger = logging.getLogger(__name__)
+def trace_number(phone_number):
+    url = "https://calltracer.in"
     headers = {
-        "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) "
-                      "AppleWebKit/537.36 (KHTML, like Gecko) "
-                      "Chrome/122.0.0.0 Safari/537.36"
+        "Host": "calltracer.in",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:133.0) Gecko/20100101 Firefox/133.0",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.5",
+        "Content-Type": "application/x-www-form-urlencoded",
     }
+    payload = {"country": "IN", "q": phone_number}
 
     try:
-        resp = requests.get(url, headers=headers, timeout=15)
-        if resp.status_code != 200:
-            return VehicleOut(ok=False, rc=rc, message=f"HTTP {resp.status_code}")
-
-        soup = BeautifulSoup(resp.text, "html.parser")
-        
-        # Check if the page itself says "No data found"
-        no_data_found = soup.find(string=lambda text: text and "No data found" in text)
-        if no_data_found:
-            return VehicleOut(ok=False, rc=rc, message="No data found for this RC number on the source website.")
-
-        data = {}
-
-        def get_text(label):
-            el = soup.find("td", string=lambda t: t and label in t)
-            return el.find_next("td").get_text(strip=True) if el else None
-
-        data["owner_name"] = get_text("Owner Name")
-        data["father_name"] = get_text("Father Name")
-        data["model_name"] = get_text("Model Name")
-        data["maker_model"] = get_text("Maker Model")
-        data["vehicle_class"] = get_text("Vehicle Class")
-        data["fuel"] = get_text("Fuel")
-        data["reg_date"] = get_text("Registration Date")
-        data["insurance"] = {
-            "number": get_text("Insurance No"),
-            "expiry": get_text("Insurance Expiry Date"),
-            "upto": get_text("Insurance Upto"),
-        }
-        data["financier_name"] = get_text("Financier Name")
-        data["rto"] = get_text("RTO")
-        data["address"] = get_text("Address")
-        data["city"] = get_text("City")
-        data["phone"] = get_text("Phone")
-
-        if not any(data.values()):
-            return VehicleOut(ok=False, rc=rc, message="Could not find any data fields. The website structure may have changed.")
-
-        return VehicleOut(ok=True, rc=rc, **data)
-
+        response = requests.post(url, headers=headers, data=payload)
+        if response.status_code == 200:
+            soup = BeautifulSoup(response.text, "html.parser")
+            details = {}
+            try:
+                details["📞 Number"] = phone_number
+                details["❗️ Complaints"] = soup.find(text="Complaints").find_next("td").text
+                details["👤 Owner Name"] = soup.find(text="Owner Name").find_next("td").text
+                details["📶 SIM card"] = soup.find(text="SIM card").find_next("td").text
+                details["📍 Mobile State"] = soup.find(text="Mobile State").find_next("td").text
+                details["🔑 IMEI number"] = soup.find(text="IMEI number").find_next("td").text
+                details["🌐 MAC address"] = soup.find(text="MAC address").find_next("td").text
+                details["⚡️ Connection"] = soup.find(text="Connection").find_next("td").text
+                details["🌍 IP address"] = soup.find(text="IP address").find_next("td").text
+                details["🏠 Owner Address"] = soup.find(text="Owner Address").find_next("td").text
+                details["🏘 Hometown"] = soup.find(text="Hometown").find_next("td").text
+                details["🗺 Reference City"] = soup.find(text="Refrence City").find_next("td").text
+                details["👥 Owner Personality"] = soup.find(text="Owner Personality").find_next("td").text
+                details["🗣 Language"] = soup.find(text="Language").find_next("td").text
+                details["📡 Mobile Locations"] = soup.find(text="Mobile Locations").find_next("td").text
+                details["🌎 Country"] = soup.find(text="Country").find_next("td").text
+                details["📜 Tracking History"] = soup.find(text="Tracking History").find_next("td").text
+                details["🆔 Tracker Id"] = soup.find(text="Tracker Id").find_next("td").text
+                details["📶 Tower Locations"] = soup.find(text="Tower Locations").find_next("td").text
+            except Exception:
+                return "⚠️ Error: Unable to extract all details. Please check the response format."
+            return details
+        else:
+            return f"⚠️ Failed to fetch data. HTTP Status Code: {response.status_code}"
     except Exception as e:
-        return VehicleOut(ok=False, rc=rc, message=str(e))
+        return f"❌ An error occurred: {str(e)}"
+def main():
+    telegram_channel_url = "https://t.me/ZCARDING"
+    print("*🔍 Welcome to the OSINT Detective Tool!*\n")
+    print("📢 Please join our Telegram channel for updates and more tools!\n")
+    print(f"Opening Telegram channel in your browser: {telegram_channel_url}")
+    webbrowser.open(telegram_channel_url)
+
+    print("\n📲 Trace phone numbers and get information.\n")
+
+    while True:
+        phone_number = input("Enter a phone number to trace (or 'exit' to quit): ").strip()
+        if phone_number.lower() == 'exit':
+            print("Goodbye!")
+            break
+
+        print(f"🔍 Tracing number: {phone_number}... Please wait!")
+        details = trace_number(phone_number)
+        if isinstance(details, dict):
+            message = "\n".join([f"{key}: {value}" for key, value in details.items()])
+        else:
+            message = details
+        print("\n📋 Results:\n")
+        print(message)
+if __name__ == "__main__":
+    main()
