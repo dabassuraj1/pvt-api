@@ -4,12 +4,11 @@ from selenium.webdriver.chrome.options import Options
 from bs4 import BeautifulSoup
 import requests
 import time
-import os  # <-- to read PORT from environment
 
 app = Flask(__name__)
 
 # ----------------------------
-# VahanX scraping
+# VahanX scraping (faster, structured)
 # ----------------------------
 def get_vehicle_details_vahanx(rc_number: str) -> dict:
     rc = rc_number.strip().upper()
@@ -22,7 +21,7 @@ def get_vehicle_details_vahanx(rc_number: str) -> dict:
         "sec-ch-ua-mobile": "?1",
         "sec-ch-ua-platform": "\"Android\"",
         "Upgrade-Insecure-Requests": "1",
-        "User-Agent": "Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36",
+        "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36",
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
         "Referer": "https://vahanx.in/rc-search",
         "Accept-Encoding": "gzip, deflate, br, zstd",
@@ -71,7 +70,7 @@ def get_vehicle_details_vahanx(rc_number: str) -> dict:
     return data
 
 # ----------------------------
-# Carinfo.app scraping (fallback)
+# Carinfo.app scraping (JS site, fallback)
 # ----------------------------
 def get_vehicle_details_carinfo(rc_number: str) -> dict:
     url = f"https://www.carinfo.app/rc-details/{rc_number}"
@@ -114,5 +113,4 @@ def rc_lookup(reg_number):
 
 # ----------------------------
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 8080))
-    app.run(host="0.0.0.0", port=port, debug=True)
+    app.run(host="0.0.0.0", port=8080, debug=True)
