@@ -1,4 +1,6 @@
+pip install --upgrade pip
 Flask==2.3.3
 requests==2.32.5
 beautifulsoup4==4.13.4
 gunicorn==21.2.0
+lxml==4.9.3
