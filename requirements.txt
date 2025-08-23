@@ -3,3 +3,4 @@ uvicorn
 requests
 Flask==2.3.3
 selenium
+beautifulsoup4
