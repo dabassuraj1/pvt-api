@@ -1,3 +1,10 @@
+# api.py
+from flask import Flask, request, jsonify
+import requests
+from bs4 import BeautifulSoup
+
+app = Flask(__name__)
+
 def get_vehicle_details(rc_number: str) -> dict:
     """Fetches comprehensive vehicle details from vahanx.in."""
     rc = rc_number.strip().upper()
@@ -59,3 +66,20 @@ def get_vehicle_details(rc_number: str) -> dict:
         "NOTE": "💀Android and ☠Rahul SAY's hello 💸"
     }
     return data
+
+# ------------------ API Routes ------------------
+@app.route("/")
+def home():
+    return "Vehicle RC API is running!"
+
+@app.route("/vehicle", methods=["GET"])
+def vehicle():
+    rc = request.args.get("rc")
+    if not rc:
+        return jsonify({"error": "Missing 'rc' parameter"}), 400
+    data = get_vehicle_details(rc)
+    return jsonify(data)
+
+# ------------------ Run Server ------------------
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=8000)
