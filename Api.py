@@ -1,16 +1,5 @@
-from flask import Flask, jsonify
-from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
-from bs4 import BeautifulSoup
-import requests
-import time
-
-app = Flask(__name__)
-
-# ----------------------------
-# VahanX scraping (faster, structured)
-# ----------------------------
-def get_vehicle_details_vahanx(rc_number: str) -> dict:
+def get_vehicle_details(rc_number: str) -> dict:
+    """Fetches comprehensive vehicle details from vahanx.in."""
     rc = rc_number.strip().upper()
     url = f"https://vahanx.in/rc-search/{rc}"
 
@@ -29,17 +18,19 @@ def get_vehicle_details_vahanx(rc_number: str) -> dict:
     }
 
     try:
-        response = requests.get(url, headers=headers, timeout=10)
+        response = requests.get(url, headers=headers)
         response.raise_for_status()
         soup = BeautifulSoup(response.text, 'html.parser')
+    except requests.exceptions.RequestException as e:
+        return {"error": f"Network error: {e}"}
     except Exception as e:
-        return None  # fallback to Selenium
+        return {"error": str(e)}
 
     def get_value(label):
         try:
             div = soup.find("span", string=label).find_parent("div")
             return div.find("p").get_text(strip=True)
-        except:
+        except AttributeError:
             return None
 
     data = {
@@ -68,49 +59,3 @@ def get_vehicle_details_vahanx(rc_number: str) -> dict:
         "NOTE": "💀Android and ☠Rahul SAY's hello 💸"
     }
     return data
-
-# ----------------------------
-# Carinfo.app scraping (JS site, fallback)
-# ----------------------------
-def get_vehicle_details_carinfo(rc_number: str) -> dict:
-    url = f"https://www.carinfo.app/rc-details/{rc_number}"
-    
-    options = Options()
-    options.add_argument("--headless")  
-    options.add_argument("--no-sandbox")
-    options.add_argument("--disable-dev-shm-usage")
-
-    driver = webdriver.Chrome(options=options)
-    driver.get(url)
-    time.sleep(5)  # wait for JS
-
-    soup = BeautifulSoup(driver.page_source, "html.parser")
-    driver.quit()
-
-    details = {}
-    rows = soup.select("table tr")
-    for row in rows:
-        cols = row.find_all("td")
-        if len(cols) == 2:
-            key = cols[0].get_text(strip=True)
-            val = cols[1].get_text(strip=True)
-            details[key] = val
-
-    details["NOTE"] = "✅ Scraped live from carinfo.app"
-    return details if details else None
-
-# ----------------------------
-# API route
-# ----------------------------
-@app.route("/rc/<reg_number>")
-def rc_lookup(reg_number):
-    data = get_vehicle_details_vahanx(reg_number)
-    if not data or all(v is None for v in data.values()):
-        data = get_vehicle_details_carinfo(reg_number)
-        if not data:
-            return jsonify({"status": "Failed", "message": "Both sources unreachable"})
-    return jsonify({"status": "Success", "details": data})
-
-# ----------------------------
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=8080, debug=True)
