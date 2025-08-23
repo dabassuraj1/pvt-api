@@ -1,12 +1,17 @@
 # api.py
-from flask import Flask, request, jsonify
-import requests
+from flask import Flask, jsonify
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
 from bs4 import BeautifulSoup
+import requests
+import time
 
 app = Flask(__name__)
 
-def get_vehicle_details(rc_number: str) -> dict:
-    """Fetches comprehensive vehicle details from vahanx.in."""
+# ----------------------------
+# VahanX scraping (faster, structured)
+# ----------------------------
+def get_vehicle_details_vahanx(rc_number: str) -> dict:
     rc = rc_number.strip().upper()
     url = f"https://vahanx.in/rc-search/{rc}"
 
@@ -25,20 +30,18 @@ def get_vehicle_details(rc_number: str) -> dict:
     }
 
     try:
-        response = requests.get(url, headers=headers)
+        response = requests.get(url, headers=headers, timeout=10)
         response.raise_for_status()
         soup = BeautifulSoup(response.text, 'html.parser')
-    except requests.exceptions.RequestException as e:
-        return {"error": f"Network error: {e}"}
-    except Exception as e:
-        return {"error": str(e)}
+    except Exception:
+        return None  # fallback to Selenium
 
     def get_value(label):
         try:
-            div = soup.find("span", string=label).find_parent("div")
-            return div.find("p").get_text(strip=True)
-        except AttributeError:
-            return None
+            div = soup.find("span", string=lambda s: s and label.lower() in s.lower()).find_parent("div")
+            return div.find("p").get_text(strip=True) if div else "NA"
+        except:
+            return "NA"
 
     data = {
         "Owner Name": get_value("Owner Name"),
@@ -63,23 +66,56 @@ def get_vehicle_details(rc_number: str) -> dict:
         "Address": get_value("Address"),
         "City Name": get_value("City Name"),
         "Phone": get_value("Phone"),
-        "NOTE": "💀Android and ☠Rahul SAY's hello 💸"
+        "NOTE": "💀 Android and ☠ Rahul SAY's hello 💸"
     }
     return data
 
-# ------------------ API Routes ------------------
-@app.route("/")
-def home():
-    return "Vehicle RC API is running!"
+# ----------------------------
+# Carinfo.app scraping (JS site, fallback)
+# ----------------------------
+def get_vehicle_details_carinfo(rc_number: str) -> dict:
+    url = f"https://www.carinfo.app/rc-details/{rc_number}"
+    
+    options = Options()
+    options.add_argument("--headless")
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-dev-shm-usage")
 
-@app.route("/vehicle", methods=["GET"])
-def vehicle():
-    rc = request.args.get("rc")
-    if not rc:
-        return jsonify({"error": "Missing 'rc' parameter"}), 400
-    data = get_vehicle_details(rc)
-    return jsonify(data)
+    driver = webdriver.Chrome(options=options)
+    driver.get(url)
+    time.sleep(5)  # wait for JS to render
 
-# ------------------ Run Server ------------------
+    soup = BeautifulSoup(driver.page_source, "html.parser")
+    driver.quit()
+
+    details = {}
+    rows = soup.select("table tr")
+    for row in rows:
+        cols = row.find_all("td")
+        if len(cols) == 2:
+            key = cols[0].get_text(strip=True)
+            val = cols[1].get_text(strip=True)
+            details[key] = val or "NA"
+
+    details["NOTE"] = "✅ Scraped live from carinfo.app"
+    return details if details else None
+
+# ----------------------------
+# API route
+# ----------------------------
+@app.route("/rc/<reg_number>")
+def rc_lookup(reg_number):
+    # Try fast vahanx scrape
+    data = get_vehicle_details_vahanx(reg_number)
+    
+    # Fallback to JS-rendered site
+    if not data or all(v == "NA" for v in data.values()):
+        data = get_vehicle_details_carinfo(reg_number)
+        if not data:
+            return jsonify({"status": "Failed", "message": "Both sources unreachable"}), 503
+    
+    return jsonify({"status": "Success", "details": data})
+
+# ----------------------------
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=8000)
+    app.run(host="0.0.0.0", port=8080, debug=True)
